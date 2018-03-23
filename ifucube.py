@@ -63,6 +63,13 @@ class IFUCube(object):
             if fix:
                 log.error('  Can\'t fix lack of data')
                 return False
+        elif fits_file[0].data is None:
+            good = False
+            log.warning('   data is None')
+
+            if fix:
+                log.error('   Can\'t fix data being None')
+                return False
         else:
             log.info('  data exists and is of shape {}'.format(
                 fits_file[0].data.shape))
@@ -79,16 +86,21 @@ class IFUCube(object):
         """
         log.debug('In check_ctype')
         good = True
+        for ctype_num in range(1,4):
+            ctype = 'CTYPE' + ctype_num
+            if ctype not in fits_file[0].header:
+                good = False
+                log.warning('  {} does not exist').format(ctype)
 
-        if 'CTYPE1' not in fits_file[0].header:
-            good = False
-            log.warning('  CTYPE1 does not exist')
+                if fix:
+                    log.info('  Fixing')
+                    # Fake values that work for testing, but may not provide accurate results
+                    fits_file[0].header[ctype] = 'RA---TAN' if ctype == 'CTYPE1' else False
+                    fits_file[0].header[ctype] = 'DEC--TAN' if ctype == 'CTYPE2' else False
+                    fits_file[0].header[ctype] = 'WAVE' if ctype == 'CTYPE3' else False
 
-            if fix:
-                log.info('  Fixing')
-                fits_file[0].header['CTYPE1'] = 0
-        else:
-            log.info('  CTYPE1 exists and is {}'.format(
-                fits_file[0].header['CTYPE1']))
+            else:
+                log.info('  {} exists and is {}'.format(ctype,
+                                                        fits_file[0].header[ctype]))
 
         return good
