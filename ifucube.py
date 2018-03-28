@@ -3,7 +3,7 @@ import logging
 
 from astropy.io import fits
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format="%(filename)s: %(levelname)8s %(message)s")
 log = logging.getLogger('ifcube')
 log.setLevel(logging.DEBUG)
 
@@ -14,7 +14,7 @@ class IFUCube(object):
     """
 
     def __init__(self):
-        pass
+        self._fits = None
 
     def check(self, filename, fix=False):
         """
@@ -31,7 +31,7 @@ class IFUCube(object):
 
         # Open the file
         try:
-            fits_file = fits.open(filename)
+            self._fits = fits.open(filename)
         except:
             log.warning('Could not open {} '.format(filename))
             return
@@ -43,9 +43,11 @@ class IFUCube(object):
                       method_name.startswith('check_')]
 
         for method in methods:
-            method(fits_file, fix)
+            method(fix)
 
-    def check_data(self, fits_file, fix=False):
+        return self._fits
+
+    def check_data(self, fix=False):
         """
         Check CTYPE and make sure it is the correct value
 
@@ -54,41 +56,74 @@ class IFUCube(object):
         :return: boolean whether it is good or not
         """
         log.debug('In check_data')
-        good = True
+        good = False
+        data_shape = []
 
-        if not hasattr(fits_file[0], 'data'):
-            good = False
-            log.warning('  data does not exist')
+        for ii, hdu in enumerate(self._fits):
+            if hasattr(hdu, 'data') and hdu.data is not None:
+                good = True
+                extname = hdu.header['EXTNAME'] if 'EXTNAME' in hdu.header else 'No extension name'
+                log.info('  data exists in HDU ({}, {}) and is of shape {}'.format(
+                    ii, extname, hdu.data.shape))
 
-            if fix:
-                log.error('  Can\'t fix lack of data')
-                return False
-        else:
-            log.info('  data exists and is of shape {}'.format(
-                fits_file[0].data.shape))
+                # Check to see if the same size as the others
+                if data_shape and not data_shape == hdu.data.shape:
+                    log.warning('  Data are of different shapes (previous was {} and this is {})'.format(data_shape, hdu.data.shape))
+
+                data_shape = hdu.data.shape
+
+        if not good:
+            log.error('  Can\'t fix lack of data')
+            return False
 
         return good
 
-    def check_ctype(self, fits_file, fix=False):
+    def check_ctype1(self, fix=False):
+        self._check_ctype(key='CTYPE1', correct='RA--TAN', fix=fix)
+
+    def check_ctype2(self, fix=False):
+        self._check_ctype(key='CTYPE2', correct='DEC--TAN', fix=fix)
+
+    def check_ctype3(self, fix=False):
+        self._check_ctype(key='CTYPE3', correct='WAVE', fix=fix)
+
+    def _check_ctype(self, key, correct, fix=False):
         """
-        Check CTYPE and make sure it is the correct value
+        Check CTYPE1 and make sure it is the correct value
 
         :param: fits_file: The open fits file
         :param: fix: boolean whether to fix it or not
         :return: boolean whether it is good or not
         """
-        log.debug('In check_ctype')
-        good = True
+        log.debug('In check for {}'.format(key))
+        good = False
+        ctype = None
 
-        if 'CTYPE1' not in fits_file[0].header:
-            good = False
-            log.warning('  CTYPE1 does not exist')
+        # Check the first HDU which is where it is supposed to be
+        if key in self._fits[0].header:
+            ctype = self._fits[0].header[key]
+            log.info('Good, found {}, {}, in initial header'.format(key, ctype))
+            good = True
 
-            if fix:
-                log.info('  Fixing')
-                fits_file[0].header['CTYPE1'] = 0
+        # If not in the first HDU then check the others
         else:
-            log.info('  CTYPE1 exists and is {}'.format(
-                fits_file[0].header['CTYPE1']))
+            log.warning('{} not in first HDU, checking others'.format(key))
+            for ii, hdu in enumerate(self._fits):
+                if ii == 0 and ctype is None:
+                    continue
+
+                extname = hdu.header['EXTNAME'] if 'EXTNAME' in hdu.header else 'No extension name'
+
+                if key in hdu.header:
+                    ctype = hdu.header[key]
+                    log.info('Found {} = {} in ({}, {})'.format(key, ctype, ii, extname))
+                    good = True
+
+        if not good and fix:
+            ctype = correct
+            log.info('{} not found and setting to {}'.format(key, ctype))
+            self._fits[0].header[key] = ctype
+
+        log.info('ctype is {}'.format(ctype))
 
         return good
