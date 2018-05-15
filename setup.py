@@ -33,5 +33,6 @@ setup(
     ],
     keywords=[ 'detect', 'open', 'file', 'handle', 'psutil', 'pytest', 'py.test' ],
     install_requires=[ 'pytest>=2.8.0', 'psutil' ],
-    python_requires='>=3.5'
+    python_requires='>=3.5',
+    test_suite='tests',
 )
