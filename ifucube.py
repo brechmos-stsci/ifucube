@@ -1,24 +1,32 @@
 import os
 import logging
+import coloredlogs
 from collections import defaultdict
 
 from astropy.io import fits
 from astropy import units as u
 
-logging.basicConfig(level=logging.DEBUG, format="%(filename)s: %(levelname)8s %(message)s")
+FORMAT = "%(levelname)-8s %(filename)-10s %(lineno)-3d %(funcName)-12s%(message)s"
+coloredlogs.install(fmt=FORMAT)
+logging.basicConfig()
 log = logging.getLogger('ifcube')
-log.setLevel(logging.WARNING)
+log.setLevel(logging.DEBUG)
 
 
 class IFUCube(object):
     """
-    Check and correct the IFUCube
+    Check and correct the IFUCube. There are two modes:
+      1. Check the file and report on unexpected issues, then exit.
+      2. Fix the file based on unexpected issues and return "corrected" FITS file.
+
     """
 
     def __init__(self):
         self._fits = None
         self._filename = None
         self._good = True
+
+        # Log of the check results
         self._log_text = defaultdict(lambda: dict())
 
         self._units = [u.m, u.cm, u.mm, u.um, u.nm, u.AA]
@@ -28,21 +36,21 @@ class IFUCube(object):
         """
         Check all checkers
         """
-        self._filename = filename
+        log.info('filename {}'.format(filename))
 
-        log.debug('In check with filename {} and fix {}'.format(filename, fix))
+        self._filename = filename
 
         # Check existence of the file
         if not os.path.isfile(filename):
             log.warning('File {} does not exist'.format(filename))
             return
         else:
-            log.info('File {} exists'.format(filename))
+            log.debug('File {} exists'.format(filename))
 
         # Open the file
         try:
             self._fits = fits.open(filename)
-        except:
+        except Exception as e:
             log.warning('Could not open {} '.format(filename))
             return
 
@@ -54,8 +62,11 @@ class IFUCube(object):
         """
         Check all checkers
         """
-        log.debug('In check with filename {} and fix {}'.format(self._filename, fix))
+        log.info('filename {} and fix {}'.format(self._filename, fix))
+
         self._log_text['>front'] = 'Checking filename {}\n'.format(self._filename)
+
+        self.check_extension_names(fix)
 
         self.check_data(fix)
 
@@ -71,69 +82,136 @@ class IFUCube(object):
 
         self.check_cunit3(fix)
 
+        self.check_wavelengths(fix)
+
         return self._fits
 
-    def check_data(self, fix=False):
+    def check_wavelengths(self, fix=False):
         """
-        Check CTYPE and make sure it is the correct value
+        Check the wavelengths in the FITS file to make sure they actually there.
 
-        :param: fits_file: The open fits file
         :param: fix: boolean whether to fix it or not
         :return: boolean whether it is good or not
         """
-        log.debug('In check_data')
-        good = False
-        data_shape = []
+        log.info('in: fix {}'.format(fix))
 
+        all_ext_names = True
+
+        # Run through the extensions to check the data in each.
         for ii, hdu in enumerate(self._fits):
 
-            # Check the EXTNAME field for this HDU
-            if not 'EXTNAME' in hdu.header:
+            # CHECK: Check the EXTNAME field for this HDU
+            if 'EXTNAME' not in hdu.header:
                 log.warning(' HDU {} has no EXTNAME field'.format(ii))
 
                 if fix:
+                    # Set the EXTNAME to be the extension number
                     self._fits[ii].header['EXTNAME'] = '{}_{}'.format(self._filename, ii)
-                    log.info(' Setting HDU {} EXTNAME field to {}'.format(ii, self._fits[ii].header['EXTNAME']))
-                    self._log_text[hdu.name]['data'] = 'Setting HDU {} EXTNAME field to {}\n'.format(ii, self._fits[ii].header['EXTNAME'])
+                    log.info(' Setting HDU {} EXTNAME field to {}'.format(
+                        ii, self._fits[ii].header['EXTNAME']))
 
+                    # Add to the logging for output
+                    self._log_text[hdu.name]['data'] = \
+                        'Setting HDU {} EXTNAME field to {}\n'.format(
+                                ii, self._fits[ii].header['EXTNAME'])
+                else:
+                    # If we are not fixing then let's complain
+                    all_ext_names = False
+
+        return all_ext_names
+
+    def check_extension_names(self, fix=False):
+        """
+        Check the data in the FITS file to make sure there actually data in there.
+
+        :param: fix: boolean whether to fix it or not
+        :return: boolean whether it is good or not
+        """
+        log.info('in: fix {}'.format(fix))
+
+        all_ext_names = True
+
+        # Run through the extensions to check the data in each.
+        for ii, hdu in enumerate(self._fits):
+
+            # CHECK: Check the EXTNAME field for this HDU
+            if 'EXTNAME' not in hdu.header:
+                log.warning(' HDU {} has no EXTNAME field'.format(ii))
+
+                if fix:
+                    # Set the EXTNAME to be the extension number
+                    self._fits[ii].header['EXTNAME'] = '{}_{}'.format(self._filename, ii)
+                    log.info(' Setting HDU {} EXTNAME field to {}'.format(
+                        ii, self._fits[ii].header['EXTNAME']))
+
+                    # Add to the logging for output
+                    self._log_text[hdu.name]['data'] = \
+                        'Setting HDU {} EXTNAME field to {}\n'.format(
+                                ii, self._fits[ii].header['EXTNAME'])
+                else:
+                    # If we are not fixing then let's complain
+                    all_ext_names = False
+
+        return all_ext_names
+
+    def check_data(self, fix=False):
+        """
+        Check the data in the FITS file to make sure there actually data in there.
+
+        :param: fix: boolean whether to fix it or not
+        :return: boolean whether it is good or not
+        """
+        log.info('in: fix {}'.format(fix))
+
+        has_3d_data = False
+        data_shape = []
+
+        # Run through the extensions to check the data in each.
+        for ii, hdu in enumerate(self._fits):
+
+            # CHECK: Check to make sure we have at least one cube of data
             if hasattr(hdu, 'data') and hdu.data is not None and len(hdu.data.shape) == 3:
-                good = True
-                self.good_check(good)
+                has_3d_data = True
                 extname = self._fits[ii].header['EXTNAME']
 
-                log.info('  data exists in HDU ({}, {}) and is of shape {}'.format(
+                log.debug('  data exists in HDU ({}, {}) and is of shape {}'.format(
                     ii, extname, hdu.data.shape))
 
                 # Check to see if the same size as the others
                 if data_shape and not data_shape == hdu.data.shape:
-                    log.warning('  Data are of different shapes (previous was {} and this is {})'.format(data_shape,
-                                                                                                         hdu.data.shape))
+                    log.warning('  Data are of different shapes (previous was {} and this is {})'.format(
+                            data_shape, hdu.data.shape))
 
                 data_shape = hdu.data.shape
 
-        if not good:
+        if not has_3d_data:
             self.good_check(False)
             log.error('  Can\'t fix lack of data')
-            return False
 
-        return good
+        return has_3d_data
 
     def check_ctype1(self, fix=False):
+        log.info('in: fix {}'.format(fix))
         self._check_ctype(key='CTYPE1', correct='RA---TAN', fix=fix)
 
     def check_ctype2(self, fix=False):
+        log.info('in: fix {}'.format(fix))
         self._check_ctype(key='CTYPE2', correct='DEC--TAN', fix=fix)
 
     def check_ctype3(self, fix=False):
+        log.info('in: fix {}'.format(fix))
         self._check_ctype(key='CTYPE3', correct='WAVE', fix=fix)
 
     def check_cunit1(self, fix=False):
+        log.info('in: fix {}'.format(fix))
         self._check_ctype(key='CUNIT1', correct='deg', fix=fix)
 
     def check_cunit2(self, fix=False):
+        log.info('in: fix {}'.format(fix))
         self._check_ctype(key='CUNIT2', correct='deg', fix=fix)
 
     def check_cunit3(self, fix=False):
+        log.info('in: fix {}'.format(fix))
         self._check_ctype(key='CUNIT3', correct=self._units_titles, fix=fix)
 
     def _check_ctype(self, key, correct, fix=False):
@@ -144,7 +222,7 @@ class IFUCube(object):
         :param: fix: boolean whether to fix it or not
         :return: boolean whether it is good or not
         """
-        log.debug('In check for {}'.format(key))
+        log.info('in: key {}  correct {}'.format(key, correct))
 
         for ii, hdu in enumerate(self._fits):
             if ii == 0 or (hasattr(hdu, 'data') and hdu.data is not None and len(hdu.data.shape) == 3):
@@ -165,6 +243,8 @@ class IFUCube(object):
         :param ii: The index of the hdu within the FITS file
         :return:
         """
+        log.info('in: ')
+
         # (i.e. Angstroms instead of Angstrom will be corrected and added)
         if hdu.header[key] not in correct and len(hdu.header[key]) > 0 and hdu.header[key][:-1] in correct:
             self.good_check(False)
@@ -189,6 +269,10 @@ class IFUCube(object):
             self._log_text[hdu.name][key] = "{} is {}, should equal {}".format(key, hdu.header[key], correct[0])
 
     def get_log_output(self):
+        """
+        Return the logging output as a strings.
+        """
+        log.info('in:')
 
         output = self._log_text['>front'] + '\n'
 
@@ -210,10 +294,13 @@ class IFUCube(object):
         return output
 
     def good_check(self, good):
-        if good and self._good:
-            self._good = True
-        if not good:
-            self._good = False
+        """
+        Keep track of whether the file is actually good all the way around.
+        """
+        log.info('in:')
+        self._good = self._good and good
 
-    def get_good(self):
+    @property
+    def good(self):
+        log.info('in:')
         return self._good

@@ -6,4 +6,4 @@ filename = '/Users/crjones/Documents/DATB/cubeviz/data/manga-7495-12704-LOGCUBE.
 
 c = IFUCube()
 
-c.check(filename)
+c.open(filename)
