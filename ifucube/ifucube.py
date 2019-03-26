@@ -1,19 +1,17 @@
 import os
 import logging
-import coloredlogs
 from collections import defaultdict
 
 from astropy.io import fits
 from astropy import units as u
 
 FORMAT = "%(levelname)-8s %(filename)-10s %(lineno)-3d %(funcName)-12s%(message)s"
-coloredlogs.install(fmt=FORMAT)
 logging.basicConfig()
 log = logging.getLogger('ifcube')
 log.setLevel(logging.DEBUG)
 
 
-class IFUCube(object):
+class IFUCube:
     """
     Check and correct the IFUCube. There are two modes:
       1. Check the file and report on unexpected issues, then exit.
