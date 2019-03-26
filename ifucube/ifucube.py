@@ -47,7 +47,7 @@ class IFUCube(HasTraits):
     def constructFromASDF(cls, tree, wavelength_tree=None):
         # TODO: Look at ASDF tag mechanism
         name = 'asdf'
-        data = 3
+        data = 33
         unit = u.AA
         other_header = {}
         wavelength = WavelengthLinearModel()
