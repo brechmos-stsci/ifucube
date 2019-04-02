@@ -1,9 +1,11 @@
+import glob
+
 import pytest
 from astropy import units as u
-
 from ifucube.ifucubelist import IFUList
 
 filename = 'ifucube/tests/data/data_cube.fits.gz'
+filenames = glob.glob('../../cubeviz/data/*fits*')
 
 
 def test_load():
@@ -20,3 +22,10 @@ def test_load():
 
     assert ifulist[0].wavelength(12, 34, 34).value == pytest.approx(1.9345*10**-6, rel=0.0001)
     assert ifulist[0].wavelength(12, 34, 34).unit == u.m
+
+
+@pytest.mark.parametrize('filename', filenames)
+def test_loading(filename):
+    ifulist = IFUList.read(filename)
+
+    assert len(ifulist) >= 1

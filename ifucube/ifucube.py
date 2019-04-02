@@ -16,6 +16,7 @@ class IFUCube(HasTraits):
         ('spaxel', 'pixel'),
         ('Counts', 'count'),
         ('COUNTS', 'count'),
+        ('METER', 'meter'),
     ]
 
     _name = Unicode()
