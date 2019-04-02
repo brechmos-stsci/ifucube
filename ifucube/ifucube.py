@@ -14,10 +14,12 @@ class IFUCube(HasTraits):
         ('Ang', 'A'),
         ('Spaxel', 'pixel'),
         ('spaxel', 'pixel'),
+        ('Counts', 'count'),
+        ('COUNTS', 'count'),
     ]
 
     _name = Unicode()
-    unit = Instance(u.UnitBase)
+    _unit = Instance(u.UnitBase)
     _wavelength = Instance(Wavelength)
     _other_header = Dict()
 
@@ -56,36 +58,19 @@ class IFUCube(HasTraits):
 
     def __init__(self, name=None, data=None, unit=None, other_header=None, wavelength=None):
 
-        self._name = name
+        self.name = name
         self.unit = unit
-        self._data = data
-        self._other_header = other_header
-        self._wavelength = wavelength
+        self.data = data
+        self.other_header = other_header
+        self.wavelength = wavelength
 
-        self.unit.on_trait_change(self._unit_changed, 'unit')
+    @property
+    def unit(self):
+        return self._unit
 
-    # @property
-    # def unit(self):
-    #     return self._unit
-    #
-    # @unit.setter
-    # def unit(self, value):
-    #     print('Entering unit setter with {}'.format(value))
-    #
-    #     # If this is a string coming in, then let's first
-    #     # fix any issues based on the mapping.
-    #     for m in IFUCube.unit_mapping:
-    #         if not m[0]:
-    #             continue
-    #
-    #         print('    converting {} to {}'.format(*m))
-    #         value = value.replace(m[0], m[1])
-    #
-    #     # TODO: Do checks here that the units are valid
-    #     print('unit: going to set to {}'.format(value))
-    #     self._unit = u.Unit(value)
-
-    def _unit_changed(self, old, value):
+    @unit.setter
+    def unit(self, value):
+        print('Entering unit setter with {}'.format(value))
 
         # If this is a string coming in, then let's first
         # fix any issues based on the mapping.
@@ -99,23 +84,38 @@ class IFUCube(HasTraits):
         # TODO: Do checks here that the units are valid
         print('unit: going to set to {}'.format(value))
         self._unit = u.Unit(value)
-        return self._unit
 
     @property
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, value):
+        self._name = value
+
     @property
     def other_header(self):
         return self._other_header
+
+    @other_header.setter
+    def other_header(self, value):
+        self._other_header = value
 
     @property
     def data(self):
         return self._data
 
+    @data.setter
+    def data(self, value):
+        self._data = value
+
     @property
     def wavelength(self):
         return self._wavelength
+
+    @wavelength.setter
+    def wavelength(self, value):
+        self._wavelength = value
 
     def __str__(self):
         return 'IFUCube {} {}'.format(
