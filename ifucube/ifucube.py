@@ -1,12 +1,17 @@
 """IFUCube is one instance of a 3D IFU dataset"""
 
+import logging
+
 from astropy import units as u
-from traitlets import HasTraits, Unicode, Instance, Dict, validate
+from traitlets import HasTraits, Unicode, Instance, Dict
 
 from .wavelength import Wavelength, WavelengthLinearModel
 
+logger = logging.getLogger('ifucube')
+logger.setLevel(logging.WARNING)
 
 class IFUCube(HasTraits):
+    """Represents a single IFUCube, almost like an HDU but with parsed data."""
 
     # Create a mapping from what we don't want to what we want.
     # The search is case sensitive...
@@ -38,7 +43,6 @@ class IFUCube(HasTraits):
         if wavelength is None:
             wavelength = Wavelength.constructFromHDU(hdu)
 
-        # TODO MORE HERE
         name = hdu.header.get('EXTNAME', '')
         data = hdu.data  # should check that it exists
         unit = hdu.header.get('BUNIT', '') # auto convert to u.dimensionless
@@ -57,13 +61,22 @@ class IFUCube(HasTraits):
 
         return cls(name, data, unit, other_header, wavelength)
 
-    def __init__(self, name=None, data=None, unit=None, other_header=None, wavelength=None):
 
-        self.name = name
+    def __init__(self, name=None, data=None, unit=None, other_header=None, wavelength=None):
+        super().__init__()
+
+        self.name = name if name else ''
         self.unit = unit
         self.data = data
         self.other_header = other_header
         self.wavelength = wavelength
+
+    def __str__(self):
+        return 'IFUCube {} with data {} {}'.format(self.name,
+                                                   self.data.shape if hasattr(self.data, 'shape') else 'Empty',
+                                                   self.unit)
+    def __repr__(self):
+        return self.__str__()
 
     @property
     def unit(self):
@@ -71,7 +84,6 @@ class IFUCube(HasTraits):
 
     @unit.setter
     def unit(self, value):
-        print('Entering unit setter with {}'.format(value))
 
         # If this is a string coming in, then let's first
         # fix any issues based on the mapping.
@@ -79,11 +91,10 @@ class IFUCube(HasTraits):
             if not m[0]:
                 continue
 
-            print('    converting {} to {}'.format(*m))
-            value = value.replace(m[0], m[1])
+            if m[0] in value:
+                logger.warning('    converting {} to {}'.format(*m))
+                value = value.replace(m[0], m[1])
 
-        # TODO: Do checks here that the units are valid
-        print('unit: going to set to {}'.format(value))
         self._unit = u.Unit(value)
 
     @property
@@ -117,9 +128,3 @@ class IFUCube(HasTraits):
     @wavelength.setter
     def wavelength(self, value):
         self._wavelength = value
-
-    def __str__(self):
-        return 'IFUCube {} {}'.format(
-            self._name,
-            self._data.shape
-        )
