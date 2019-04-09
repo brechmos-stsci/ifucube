@@ -59,11 +59,18 @@ class IFUCube(HasTraits):
 
     def __init__(self, name=None, data=None, unit=None, other_header=None, wavelength=None):
 
-        self.name = name
+        self.name = name if name else ''
         self.unit = unit
         self.data = data
         self.other_header = other_header
         self.wavelength = wavelength
+
+    def __str__(self):
+        return 'IFUCube {} with data {} {}'.format(self.name,
+                                                   self.data.shape if hasattr(self.data, 'shape') else 'Empty',
+                                                   self.unit)
+    def __repr__(self):
+        return self.__str__()
 
     @property
     def unit(self):
