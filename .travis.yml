@@ -1,0 +1,48 @@
+language: python
+
+# Use Travis' container-based architecture
+sudo: false
+
+addons:
+  apt:
+    packages:
+
+python:
+  - 3.5
+  - 3.6
+  - 3.7
+
+env:
+    global:
+        # The following versions are the 'default' for tests, unless
+        # overidden underneath. They are defined here in order to save having
+        # to repeat them for all configurations.
+        - ASTROPY_VERSION=development
+        - CONDA_DEPENDENCIES=''
+        - PIP_DEPENDENCIES_FLAGS='--no-deps --force'
+        - SETUP_CMD='test --remote-data'
+
+matrix:
+    include:
+
+        # Do a coverage test in Python 2.
+        - python: 3.6
+          env: SETUP_CMD='test --coverage --open-files --remote-data'
+
+        # Check for sphinx doc build warnings - we do this first because it
+        # may run for a long time
+        # Sphinx version is temporarily fix to be <1.3.5, until #192 is
+        # resolved
+        - python: 3.6
+          env: SETUP_CMD='build_sphinx -w' SPHINX_VERSION='<1.3.5'
+
+install:
+
+script:
+   - python setup.py $SETUP_CMD
+
+after_success:
+    # If coveralls.io is set up for this package, uncomment the line
+    # below and replace "packagename" with the name of your package.
+    # The coveragerc file may be customized as needed for your package.
+    # - if [[ $SETUP_CMD == 'test --coverage --open-files --remote-data' ]]; then coveralls --rcfile='asdf/tests/coveragerc'; fi
